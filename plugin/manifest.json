@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "macdock",
+  "name": "Mac Dock",
+  "version": "1.0.0",
+  "author": "Nikoloz Lortkipanidze",
+  "description": "A macOS-style dock for floating workspaces: frosted bar, magnification, running dots, and app labels",
+  "kinds": [
+    "service"
+  ],
+  "entryPoints": {
+    "service": "Dock.qml"
+  },
+  "omarchy": {
+    "clonedFrom": "omarchy.dock"
+  }
+}
