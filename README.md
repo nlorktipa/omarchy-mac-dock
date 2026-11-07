@@ -14,8 +14,8 @@ Omarchy's built-in dock, keeps all of its behaviour, and survives
 ## Install
 
 ```bash
-git clone <this repo> ~/Projects/omarchy-mac-dock
-cd ~/Projects/omarchy-mac-dock
+git clone https://github.com/nlorktipa/omarchy-mac-dock
+cd omarchy-mac-dock
 ./install.sh
 ```
 
