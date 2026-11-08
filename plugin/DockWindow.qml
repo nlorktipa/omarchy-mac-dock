@@ -57,7 +57,7 @@ PanelWindow {
   readonly property bool autohide: !!dock && (dock.autohide || fullscreenMode === 1)
   property bool revealed: false
   readonly property bool menuOpen: menuItem !== null || settingsMenu
-  readonly property bool tucked: autohide && !(revealed || menuOpen || dragging || insertIndex >= 0)
+  readonly property bool tucked: autohide && !(revealed || menuOpen || dragging || movingDock || insertIndex >= 0)
   readonly property bool contentShown: shown && !tucked
 
   // ------------------------------------------------------------- options
@@ -118,7 +118,7 @@ PanelWindow {
   // dock. Kept while a menu is open, so the icons hold still under it.
   property real pointerAlong: 0
   property bool pointerInside: false
-  readonly property bool magnifyOn: maxScale > 1.01 && contentShown && !dragging && insertIndex < 0
+  readonly property bool magnifyOn: maxScale > 1.01 && contentShown && !dragging && !movingDock && insertIndex < 0
     && ((pointerInside && !hoverStale) || menuOpen)
   property real magnify: magnifyOn ? 1 : 0
   Behavior on magnify {
@@ -229,6 +229,31 @@ PanelWindow {
     if (window.autohide) hideTimer.restart()
   }
 
+  // ------------------------------------------------------- moving the dock
+  // Dragging the divider carries the dock to another edge, as on macOS: it
+  // snaps to whichever screen edge the pointer is nearest when released. The edge only changes on release, because
+  // re-anchoring the window mid-drag would cut off the pointer it is reading.
+  property bool movingDock: false
+  // The edge the dock would land on, or "" while the drag is too short.
+  property string moveTarget: ""
+
+  // A point in window coordinates, on the screen.
+  function screenPoint(at) {
+    var o = window.origin()
+    return Qt.point(o.x + at.x, o.y + at.y)
+  }
+
+  function edgeNearest(p) {
+    var toLeft = p.x
+    var toRight = screen.width - p.x
+    var toTop = p.y
+    var toBottom = screen.height - p.y
+    var nearest = Math.min(toLeft, toRight, toTop, toBottom)
+    if (nearest === toBottom) return "bottom"
+    if (nearest === toTop) return "top"
+    return nearest === toLeft ? "left" : "right"
+  }
+
   // The slot a resting position along the strip falls before.
   function slotIndexAt(along) {
     return Math.max(0, Math.min(window.appCount, Math.round(along / window.slotSize)))
@@ -334,7 +359,7 @@ PanelWindow {
     // Long enough to cross a gap between the edge and the icons, no longer.
     interval: 150
     onTriggered: {
-      if (!stageHover.hovered && !edgeHover.hovered && !window.menuOpen && !window.dragging) window.revealed = false
+      if (!stageHover.hovered && !edgeHover.hovered && !window.menuOpen && !window.dragging && !window.movingDock) window.revealed = false
     }
   }
 
@@ -363,10 +388,45 @@ PanelWindow {
     window: window
   }
 
+  // Where a drag of the divider will put the dock (MovePreview.qml).
+  MovePreview {
+    dockWindow: window
+  }
+
   HyprlandFocusGrab {
     active: window.menuOpen
     windows: [window]
     onCleared: window.closeMenu()
+  }
+
+  // While the divider is held and the dock would stay put, a faint glow along
+  // its own edge, drawn here behind the bar rather than over it. Kept under
+  // the blur rule's ignore_alpha (hypr/macdock.lua) so it is never frosted.
+  Rectangle {
+    id: stayGlow
+
+    readonly property bool vertical: window.vertical
+    readonly property real thickness: window.margin + window.barDepth * 1.4
+    readonly property bool staying: window.movingDock
+      && (window.moveTarget === "" || window.moveTarget === window.position)
+    readonly property color tint: Util.alpha(Commons.Color.accent, 0.09)
+    readonly property color clear: Util.alpha(Commons.Color.accent, 0)
+    readonly property bool fromStart: window.position === "left" || window.position === "top"
+
+    visible: opacity > 0
+    opacity: staying && window.shown ? 1 : 0
+    x: window.position === "right" ? window.width - thickness : 0
+    y: window.position === "bottom" ? window.height - thickness : 0
+    width: vertical ? thickness : window.width
+    height: vertical ? window.height : thickness
+
+    gradient: Gradient {
+      orientation: window.vertical ? Gradient.Horizontal : Gradient.Vertical
+      GradientStop { position: 0; color: stayGlow.fromStart ? stayGlow.tint : stayGlow.clear }
+      GradientStop { position: 1; color: stayGlow.fromStart ? stayGlow.clear : stayGlow.tint }
+    }
+
+    Behavior on opacity { NumberAnimation { duration: Style.duration(180); easing.type: Easing.OutCubic } }
   }
 
   // Everything the dock draws: the bar, and above it the magnified icons. It
@@ -461,7 +521,65 @@ PanelWindow {
 
       Rectangle {
         anchors.fill: parent
-        color: Util.alpha(Commons.Color.foreground, 0.28)
+        color: window.movingDock || dividerHandle.containsMouse
+          ? Commons.Color.accent : Util.alpha(Commons.Color.foreground, 0.28)
+      }
+    }
+
+    // The divider's grip: wider than the line, across the bar's full depth.
+    Placed {
+      visible: window.appCount > 0 && window.contentShown
+      along: window.warp(window.appCount * window.slotSize) + window.insertGrow / 2 - window.barStart
+      alongLen: window.warp(window.appCount * window.slotSize + window.separatorSize)
+        - window.warp(window.appCount * window.slotSize)
+      inward: 0
+      depth: window.barDepth
+
+      MouseArea {
+        id: dividerHandle
+
+        property point pressPoint
+
+        anchors.fill: parent
+        hoverEnabled: true
+        acceptedButtons: Qt.LeftButton
+        cursorShape: window.movingDock ? Qt.ClosedHandCursor : Qt.OpenHandCursor
+
+        function windowPoint(event) {
+          return dividerHandle.mapToItem(window.contentItem, event.x, event.y)
+        }
+
+        onPressed: function(event) {
+          window.closeMenu()
+          dividerHandle.pressPoint = dividerHandle.windowPoint(event)
+          window.moveTarget = ""
+          window.movingDock = true
+        }
+
+        // The pointer keeps reporting here while the button is held, even well
+        // outside the dock's window.
+        onPositionChanged: function(event) {
+          if (!window.movingDock) return
+          var at = dividerHandle.windowPoint(event)
+          if (window.moveTarget === ""
+              && Math.hypot(at.x - dividerHandle.pressPoint.x, at.y - dividerHandle.pressPoint.y) < Style.space(12))
+            return
+          window.moveTarget = window.edgeNearest(window.screenPoint(at))
+        }
+
+        onReleased: function(event) {
+          var target = window.moveTarget
+          window.movingDock = false
+          window.moveTarget = ""
+          if (target !== "" && target !== window.position)
+            Util.execDetached("omarchy-dock position " + target)
+          if (window.autohide) hideTimer.restart()
+        }
+
+        onCanceled: {
+          window.movingDock = false
+          window.moveTarget = ""
+        }
       }
     }
 
