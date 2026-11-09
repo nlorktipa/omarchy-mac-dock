@@ -163,7 +163,7 @@ PanelWindow {
           required property int index
 
           readonly property real along: preview.dockWindow.padAlong + index * preview.dockWindow.slotSize
-            + (index >= preview.dockWindow.appCount && preview.dockWindow.appCount > 0 ? preview.dockWindow.separatorSize : 0)
+            + (index >= preview.dockWindow.appCount ? preview.dockWindow.separatorSize : 0)
             + preview.dockWindow.inset
           readonly property real across: preview.dockWindow.padAcross + preview.dockWindow.inset
 
@@ -179,7 +179,6 @@ PanelWindow {
       }
 
       Rectangle {
-        visible: preview.dockWindow.appCount > 0
         readonly property real along: preview.dockWindow.padAlong
           + preview.dockWindow.appCount * preview.dockWindow.slotSize + preview.dockWindow.separatorSize / 2
         readonly property real across: ghost.depth * 0.2

@@ -116,7 +116,9 @@ PanelWindow {
 
   readonly property int appCount: appRepeater.count
   // The resting strip: the apps, a separator, then the button for every app.
-  readonly property real appsStart: appCount * slotSize + (appCount > 0 ? separatorSize : 0)
+  // The separator stays even with no apps, since it is the grip for moving
+  // the dock.
+  readonly property real appsStart: appCount * slotSize + separatorSize
   readonly property real restLength: appsStart + slotSize
   readonly property real alongLength: vertical ? height : width
   readonly property real restStart: Math.round((alongLength - restLength) / 2)
@@ -335,7 +337,12 @@ PanelWindow {
   // from hypr/macdock.lua, apply to it.
   WlrLayershell.namespace: "omarchy-dock"
   WlrLayershell.layer: WlrLayer.Top
-  WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+  // Hyprland keeps the pointer on the surface a button was pressed on only
+  // while some surface has keyboard focus. With no windows at all nothing
+  // does, so the divider would lose the pointer as soon as it left the dock;
+  // the dock takes focus for the drag instead.
+  WlrLayershell.keyboardFocus: window.movingDock && Hyprland.toplevels.values.length === 0
+    ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
   // Kept clear of the bar's reserved edge. While it stays on screen it reserves
   // the resting bar and its margin (not the room kept for magnification and
   // menus), so windows stop short of it.
@@ -517,7 +524,6 @@ PanelWindow {
 
     // Between the apps and the button for every app.
     Placed {
-      visible: window.appCount > 0
       readonly property real center: (window.warp(window.appCount * window.slotSize)
         + window.warp(window.appCount * window.slotSize + window.separatorSize)) / 2
 
@@ -535,7 +541,7 @@ PanelWindow {
 
     // The divider's grip: wider than the line, across the bar's full depth.
     Placed {
-      visible: window.appCount > 0 && window.contentShown
+      visible: window.contentShown
       along: window.warp(window.appCount * window.slotSize) + window.insertGrow / 2 - window.barStart
       alongLen: window.warp(window.appCount * window.slotSize + window.separatorSize)
         - window.warp(window.appCount * window.slotSize)
