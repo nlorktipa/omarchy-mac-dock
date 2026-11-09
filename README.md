@@ -18,6 +18,13 @@ the dock will land.
 
 ![Dragging the divider toward the right edge](screenshots/move-right.png)
 
+## Settings
+
+Right-click the Applications button at the end of the dock to set its
+position (Top, Bottom, Left or Right) and to toggle **Show**. With Show off,
+the dock hides until the pointer reaches its edge and windows use the full
+screen.
+
 ## Install
 
 ```bash
@@ -28,13 +35,6 @@ cd omarchy-mac-dock
 
 Use `./install.sh --no-blur` to skip the Hyprland blur. The dock shows on
 every workspace, and windows stay clear of it, like the top bar.
-
-## Settings
-
-Right-click the Applications button at the end of the dock to set its
-position (Top, Bottom, Left or Right) and to toggle **Show**. With Show off,
-the dock hides until the pointer reaches its edge and windows use the full
-screen.
 
 ## Uninstall
 
