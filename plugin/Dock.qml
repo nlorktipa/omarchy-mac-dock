@@ -6,11 +6,11 @@ import qs.Commons
 import "DockModel.js" as DockModel
 
 // Mac Dock: Omarchy's dock (omarchy.dock) with a macOS look. This file is the
-// stock dock's logic, unchanged; the look lives in DockWindow.qml.
+// stock dock's logic; the look, and where the dock shows, live in
+// DockWindow.qml.
 //
-// An app dock that shows on floating workspaces. A floating workspace has no
-// tiles to hand the apps out, so the dock gives back a place to find them:
-// pinned apps, running apps, and a grid of every app.
+// An app dock: pinned apps, running apps, and a grid of every app. Unlike the
+// stock dock, which shows only on floating workspaces, it shows on every one.
 Item {
   id: root
 

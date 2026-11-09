@@ -4,7 +4,7 @@
   "name": "Mac Dock",
   "version": "1.0.0",
   "author": "Nikoloz Lortkipanidze",
-  "description": "A macOS-style dock for floating workspaces: frosted bar, magnification, running dots, and app labels",
+  "description": "A macOS-style dock for every workspace: frosted bar, magnification, running dots, and app labels",
   "kinds": [
     "service"
   ],

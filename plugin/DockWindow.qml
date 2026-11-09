@@ -14,7 +14,7 @@ import "DockModel.js" as DockModel
 //
 // Behaviour (pins, drag to reorder, menus, auto-hide, the app grid) is the stock
 // Omarchy dock's. The window stays mapped and only hides its contents, so
-// switching to a floating workspace does not wait on a fresh layer surface.
+// leaving fullscreen does not wait on a fresh layer surface.
 // While hidden the mask is empty and clicks fall through to the windows below.
 //
 // Geometry is worked out along the dock ("along": x for a horizontal dock, y
@@ -50,11 +50,18 @@ PanelWindow {
     }
     return mode
   }
-  readonly property bool shown: !!dock && dock.isFloating(workspaceId) && fullscreenMode < 2
+  // The dock shows on every workspace, tiled or floating, and only steps aside
+  // for a fullscreen window.
+  readonly property bool shown: !!dock && fullscreenMode < 2
+  // Whether the dock holds its edge clear of windows, as the bar does. Not
+  // while auto-hide is on: the dock then slides over the windows instead.
+  readonly property bool keptShown: !!dock && !dock.autohide
+  readonly property bool reserving: shown && keptShown
   // With auto-hide on, the dock waits off screen until the pointer reaches its
   // edge, and stays while the pointer, a menu, or a drag still needs it. A
-  // maximized window hides the dock the same way, so it can still be called up.
-  readonly property bool autohide: !!dock && (dock.autohide || fullscreenMode === 1)
+  // maximized window hides the dock the same way, so it can still be called up,
+  // unless the dock holds its edge clear, so it covers nothing.
+  readonly property bool autohide: !!dock && (dock.autohide || (fullscreenMode === 1 && !reserving))
   property bool revealed: false
   readonly property bool menuOpen: menuItem !== null || settingsMenu
   readonly property bool tucked: autohide && !(revealed || menuOpen || dragging || movingDock || insertIndex >= 0)
@@ -104,7 +111,8 @@ PanelWindow {
   readonly property int popupRoom: Style.spacing.popupRowHeight * 5 + Style.spacing.sm * 2 + Style.normalBorderWidth * 2 + gap * 2
   readonly property int overflowRoom: Math.ceil((maxScale - 1) * slotSize)
   readonly property int labelRoom: window.vertical ? 240 : Style.spacing.popupRowHeight + Style.space(16)
-  readonly property int innerRoom: Math.max(popupRoom, overflowRoom + labelRoom, Math.round(iconSize * 0.5) + labelRoom)
+  // Menus open over magnified icons, so their room starts past the overflow.
+  readonly property int innerRoom: Math.max(overflowRoom + Style.space(2) + popupRoom, overflowRoom + labelRoom, Math.round(iconSize * 0.5) + labelRoom)
 
   readonly property int appCount: appRepeater.count
   // The resting strip: the apps, a separator, then the button for every app.
@@ -153,8 +161,8 @@ PanelWindow {
   readonly property real barEnd: warp(restLength + padAlong) + insertGrow / 2
 
   // How far the dock is tucked past its edge. Auto-hide slides it, but only
-  // while the dock is on screen: arriving on a floating workspace shows it
-  // where it belongs at once.
+  // while the dock is on screen: coming back from fullscreen shows it where it
+  // belongs at once.
   property real tuck: window.tucked ? margin + barDepth + Style.space(2) : 0
   Behavior on tuck {
     id: tuckMotion
@@ -264,14 +272,12 @@ PanelWindow {
   // The apps button's menu: where the dock sits and whether it hides.
   property bool settingsMenu: false
 
-  onWorkspaceIdChanged: if (dock) dock.readMode(workspaceId)
   onShownChanged: {
     if (shown) return
     closeMenu()
     window.revealed = false
     window.pointerInside = false
   }
-  Component.onCompleted: if (dock) dock.readMode(workspaceId)
 
   function openMenu(item, slot) {
     window.settingsMenu = false
@@ -330,10 +336,11 @@ PanelWindow {
   WlrLayershell.namespace: "omarchy-dock"
   WlrLayershell.layer: WlrLayer.Top
   WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
-  // Kept clear of the bar's reserved edge, without reserving one of its own:
-  // floating windows go where they are put.
+  // Kept clear of the bar's reserved edge. While it stays on screen it reserves
+  // the resting bar and its margin (not the room kept for magnification and
+  // menus), so windows stop short of it.
   exclusionMode: ExclusionMode.Normal
-  exclusiveZone: 0
+  exclusiveZone: window.reserving ? window.margin + window.barDepth : 0
 
   anchors {
     top: window.position !== "bottom"
@@ -448,8 +455,8 @@ PanelWindow {
     y: window.vertical ? alongStart : (window.position === "top" ? near : window.height - near - depth)
     width: window.vertical ? depth : alongLen
     height: window.vertical ? alongLen : depth
-    // Switching between tiled and floating workspaces shows and hides the dock
-    // at once, with nothing to watch in between. Hidden by opacity rather than
+    // Fullscreen shows and hides the dock at once, with nothing to watch in
+    // between. Hidden by opacity rather than
     // visibility, so the icons keep their textures and are drawn on the first
     // frame back instead of being uploaded again.
     opacity: window.shown ? 1 : 0
@@ -931,11 +938,12 @@ PanelWindow {
         }
       }
 
+      // Auto-hide, put the other way round: checked keeps the dock on screen.
       MenuRow {
         visible: window.settingsMenu
-        text: Commons.I18n.t("dock.autoHide")
-        checked: window.autohide
-        onTriggered: Util.execDetached("omarchy-dock autohide " + (window.autohide ? "off" : "on"))
+        text: strings.t("dock.show")
+        checked: window.keptShown
+        onTriggered: Util.execDetached("omarchy-dock autohide " + (window.keptShown ? "on" : "off"))
       }
 
       MenuRow {

@@ -65,4 +65,4 @@ done
 omarchy plugin enable macdock >/dev/null 2>&1 || true
 # Start the shell fresh so the swap leaves nothing of the old dock behind.
 omarchy restart shell >/dev/null 2>&1
-echo "Mac Dock is on. Like the stock dock, it shows on floating workspaces."
+echo "Mac Dock is on. It shows on every workspace."
